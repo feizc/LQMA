@@ -1,4 +1,4 @@
-## Multimodal Language Quantized AutoEncoders
+## Language Quantized Masked AutoEncoders
 
-Implementation for MLLM VQ-VAE. 
+Implementation for LLM MQ-VAE. 
 
