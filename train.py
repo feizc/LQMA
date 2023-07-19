@@ -5,13 +5,17 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 from torchvision import utils as vutils
-from model import VQGAN, Discriminator, LPIPS 
+from model import VQGAN, Discriminator, LPIPS, LQGAN 
 from model import load_data, weights_init 
 
 
 class TrainVQGAN:
-    def __init__(self, args):
-        self.vqgan = VQGAN(args).to(device=args.device)
+    def __init__(self, args): 
+        if args.base == True:
+            self.vqgan = VQGAN(args).to(device=args.device)
+        else:
+            self.vqgan = LQGAN(args).to(device=args.device)
+
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
@@ -23,14 +27,24 @@ class TrainVQGAN:
 
     def configure_optimizers(self, args):
         lr = args.learning_rate
-        opt_vq = torch.optim.Adam(
-            list(self.vqgan.encoder.parameters()) +
-            list(self.vqgan.decoder.parameters()) +
-            list(self.vqgan.codebook.parameters()) +
-            list(self.vqgan.quant_conv.parameters()) +
-            list(self.vqgan.post_quant_conv.parameters()),
-            lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
-        )
+        if args.base == True:
+            opt_vq = torch.optim.Adam(
+                list(self.vqgan.encoder.parameters()) +
+                list(self.vqgan.decoder.parameters()) +
+                list(self.vqgan.codebook.parameters()) +
+                list(self.vqgan.quant_conv.parameters()) +
+                list(self.vqgan.post_quant_conv.parameters()),
+                lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
+            )
+        else: 
+            opt_vq = torch.optim.Adam(
+                list(self.vqgan.encoder.parameters()) +
+                list(self.vqgan.decoder.parameters()) +
+                list(self.vqgan.quant_conv.parameters()) +
+                list(self.vqgan.post_quant_conv.parameters()),
+                lr=lr, eps=1e-08, betas=(args.beta1, args.beta2)
+            )
+
         opt_disc = torch.optim.Adam(self.discriminator.parameters(),
                                     lr=lr, eps=1e-08, betas=(args.beta1, args.beta2))
 
@@ -92,7 +106,7 @@ class TrainVQGAN:
 
 
 def main(): 
-    parser = argparse.ArgumentParser(description="VQGAN")
+    parser = argparse.ArgumentParser(description="LM-VQGAN")
     parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z (default: 256)')
     parser.add_argument('--image-size', type=int, default=256, help='Image height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors (default: 256)')
@@ -106,9 +120,14 @@ def main():
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.0)')
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
     parser.add_argument('--disc-start', type=int, default=10000, help='When to start the discriminator (default: 0)')
-    parser.add_argument('--disc-factor', type=float, default=1., help='')
+    parser.add_argument('--disc-factor', type=float, default=0.2, help='')
     parser.add_argument('--rec-loss-factor', type=float, default=1., help='Weighting factor for reconstruction loss.')
     parser.add_argument('--perceptual-loss-factor', type=float, default=1., help='Weighting factor for perceptual loss.')
+    parser.add_argument('--base', type=bool, default=False, help='whether use train code book')
+    parser.add_argument('--llm', type=str, default="GPT-2", help='language model type')
+    parser.add_argument('--llm_path', type=str, default="ckpt/gpt2", help='language model path')
+    # language quantize VQGAN 
+    
     args = parser.parse_args()
     
     train_vqgan = TrainVQGAN(args)

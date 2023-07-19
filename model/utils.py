@@ -14,8 +14,14 @@ import matplotlib.pyplot as plt
 class ImagePaths(Dataset):
     def __init__(self, path, size=None):
         self.size = size
-
-        self.images = [os.path.join(path, file) for file in os.listdir(path)]
+        
+        #self.images = [os.path.join(path, file) for file in os.listdir(path)]
+        g = os.walk(path) 
+        self.images = []
+        for path, dir_list, file_list in g: 
+            for file_name in file_list: 
+                self.images.append(os.path.join(path, file_name))
+        
         self._length = len(self.images)
 
         self.rescaler = albumentations.SmallestMaxSize(max_size=self.size)
@@ -47,8 +53,8 @@ def load_data(args):
 
 
 # --------------------------------------------- #
-#                  Module Utils
-#            for Encoder, Decoder etc.
+#                  Module Utils                 #
+#            for Encoder, Decoder etc.          #
 # --------------------------------------------- #
 
 def weights_init(m):
