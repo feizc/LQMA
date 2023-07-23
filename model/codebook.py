@@ -3,6 +3,15 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM 
 
 
+def codebook_filter(original_embedding, corpus, k=2048):
+    """
+        select top-k embedding for code book. 
+        new_embedding = torch.nn.Embedding.from_pretrained(torch.rand(1000, 768))
+    """
+    return original_embedding 
+
+
+
 class Codebook(nn.Module):
     def __init__(self, args):
         super(Codebook, self).__init__()
