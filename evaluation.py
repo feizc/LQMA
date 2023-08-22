@@ -1,0 +1,46 @@
+import lpips
+import numpy as np
+import argparse
+from PIL import Image
+from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import peak_signal_noise_ratio as psnr
+import torch
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+from utils import make_dataset, calculate_fid_given_paths 
+
+
+def calculate_score(img_gt, img_test):
+    """
+    function to calculate the image quality score
+    :param img_gt: original image
+    :param img_test: generated image
+    :return: mae, ssim, psnr
+    """
+
+    l1loss = np.mean(np.abs(img_gt-img_test))
+
+    psnr_score = psnr(img_gt, img_test, data_range=1)
+
+    ssim_score = ssim(img_gt, img_test, multichannel=True, data_range=1, win_size=11)
+
+    lpips_dis = lpips_vgg(torch.from_numpy(img_gt).permute(2, 0, 1), torch.from_numpy(img_test).permute(2, 0, 1), normalize=True)
+
+    return l1loss, ssim_score, psnr_score, lpips_dis.data.numpy().item() 
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Image quality evaluations on the dataset')
+    parser.add_argument('--gt_path', type=str, default='result/original', help='path to original gt data')
+    parser.add_argument('--g_path', type=str, default='result/rec', help='path to the generated data')
+    parser.add_argument('--num_test', type=int, default=0, help='how many examples to load for testing')
+    args = parser.parse_args() 
+
+    lpips_vgg = lpips.LPIPS(net='vgg') 
+    gt_paths, gt_size = make_dataset(args.gt_path)
+    g_paths, g_size = make_dataset(args.g_path)
+    fid_score = calculate_fid_given_paths([args.gt_path, args.g_path], batch_size=50, cuda=False, dims=2048)
+
+    print(fid_score) 
+

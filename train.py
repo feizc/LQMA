@@ -9,6 +9,7 @@ import numpy as np
 import random 
 import multiprocessing as mp
 from matplotlib import pyplot as plt 
+from tqdm import tqdm 
  
 from model import VQModel 
 
@@ -30,25 +31,35 @@ def seed_worker(worker_id):
 
 
 def train(data_loader, model, optimizer, args, data_variance=1):
-    """trianing the model"""
-    for images, _ in data_loader:
-        images = images.to(args.device)
-        optimizer.zero_grad()
-        x, loss_vq, perplexity, _ = model(images)
+    """trianing the model""" 
+    model.train() 
+    iteration = 0 
+    loss_cum = 0
+    with tqdm(enumerate(data_loader), total=len(data_loader)) as t:
+        for _, batch in t:
+            images, _ = batch
+            images = images.to(args.device)
+            optimizer.zero_grad()
+            x, loss_vq, perplexity, _ = model(images)
 
-        # loss function
-        loss_recons = F.mse_loss(x, images) / data_variance
-        loss = loss_recons + loss_vq
-        loss.backward()
+            # loss function
+            loss_recons = F.mse_loss(x, images) / data_variance
+            loss = loss_recons + loss_vq
+            loss.backward()
 
-        optimizer.step()
-        print(loss)
-        args.steps +=1
-        break 
+            optimizer.step()
+            loss_cum += loss.item() 
+            iteration += 1
+
+            t.set_postfix(loss=loss_cum / iteration)
+            args.steps +=1 
+            if args.debug == True:
+                break 
 
 
 def test(data_loader, model, args, ):
     """evaluation model"""
+    model.eval()
     with torch.no_grad():
         loss_recons, loss_vq = 0., 0.
         for images, _ in data_loader:
@@ -56,7 +67,8 @@ def test(data_loader, model, args, ):
             x, loss, _, _ = model(images)
             loss_recons += F.mse_loss(x, images)
             loss_vq += loss 
-            break 
+            if args.debug == True: 
+                break 
 
         loss_recons /= len(data_loader)
         loss_vq /= len(data_loader)
@@ -74,8 +86,10 @@ def generate_samples(images, model, args):
 def image_plot(image_tensor, epoch, idx): 
     image_np = image_tensor.numpy() 
     plt.imshow(np.transpose(image_np, (1, 2, 0)), interpolation="nearest") 
-    # plt.show()
-    plt.savefig(str(epoch) + '_' + str(idx) + '.png')
+    # plt.show() 
+    image_path = str(epoch) + '_' + str(idx) + '.png' 
+    image_path = os.path.join('result/sample', image_path) 
+    plt.savefig(image_path) 
 
 
 def main(args): 
@@ -121,7 +135,8 @@ def main(args):
         # training and testing the model
         train(train_loader, model, optimizer, args, data_variance)  
         loss_rec, loss_vq = test(valid_loader, model, args,) 
-        print(loss_rec, loss_vq) 
+        print('reconstruct loss: ', loss_rec)
+        print('quantise loss', loss_vq) 
 
         # visualization
         images, _ = next(iter(test_loader))
@@ -136,9 +151,9 @@ def main(args):
             best_loss = loss_rec
             with open('{0}/best.pt'.format(save_filename), 'wb') as f:
                 torch.save(model.state_dict(), f) 
+        if args.debug == True: 
+            break
         
-        break 
-
 
 
 
@@ -166,4 +181,5 @@ if __name__ == "__main__":
     # Device
     args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     args.steps = 0 
+    args.debug = True 
     main(args)
